@@ -536,6 +536,13 @@ meshPrimitiveDecoder =
 meshPrimitiveAttributeDecoder : Json.Decode.Decoder MeshPrimitiveAttributes
 meshPrimitiveAttributeDecoder =
     Json.Decode.succeed MeshPrimitiveAttributes
+        |> Json.Decode.Pipeline.optional "COLOR_0" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.optional "JOINTS_0" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.optional "NORMAL" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.optional "POSITION" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.optional "TANGENT" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.optional "TEXTCOORD_0" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.optional "WEIGHTS_0" (Json.Decode.nullable Json.Decode.int) Nothing
 
 
 meshPrimitiveModeDecoder : Json.Decode.Decoder MeshPrimitiveMode
@@ -1046,7 +1053,14 @@ type alias MeshPrimitive =
 
 type alias MeshPrimitiveAttributes =
     -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_primitive_attributes
-    {}
+    { color : Maybe Int
+    , joints : Maybe Int
+    , normal : Maybe Int
+    , position : Maybe Int
+    , tangent : Maybe Int
+    , textCoordinates : Maybe Int
+    , weights : Maybe Int
+    }
 
 
 {-| <https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_primitive_mode>
