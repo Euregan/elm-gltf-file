@@ -2,7 +2,7 @@ module JsonDecoder exposing (..)
 
 import Array
 import Expect
-import Gbl.Decode exposing (AccessorComponentType(..), AccessorType(..), BufferViewTarget(..), Gltf, MaterialAlphaMode(..), MeshPrimitiveMode(..), decoder)
+import Gbl.Decode.Json.Raw exposing (AccessorComponentType(..), AccessorType(..), BufferViewTarget(..), Gltf, MaterialAlphaMode(..), MeshPrimitiveMode(..), decoder)
 import Json.Decode
 import Test exposing (..)
 

@@ -1,4 +1,4 @@
-module Gbl.Decode exposing (..)
+module Gbl.Decode.Json.Raw exposing (..)
 
 import Array exposing (Array)
 import Bytes
