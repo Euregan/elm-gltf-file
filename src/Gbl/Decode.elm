@@ -105,9 +105,9 @@ accessorDecoder =
         |> Json.Decode.Pipeline.required "componentType" accessorComponentTypeDecoder
         |> Json.Decode.Pipeline.optional "normalized" Json.Decode.bool False
         |> Json.Decode.Pipeline.required "count" Json.Decode.int
-        |> Json.Decode.Pipeline.required "type_" accessorTypeDecoder
-        |> Json.Decode.Pipeline.optional "max" (Json.Decode.nullable Json.Decode.int) Nothing
-        |> Json.Decode.Pipeline.optional "min" (Json.Decode.nullable Json.Decode.int) Nothing
+        |> Json.Decode.Pipeline.required "type" accessorTypeDecoder
+        |> Json.Decode.Pipeline.optional "max" (Json.Decode.nullable (Json.Decode.array Json.Decode.float)) Nothing
+        |> Json.Decode.Pipeline.optional "min" (Json.Decode.nullable (Json.Decode.array Json.Decode.float)) Nothing
         |> Json.Decode.Pipeline.optional "sparse" (Json.Decode.nullable accessorSparseDecoder) Nothing
         |> Json.Decode.Pipeline.optional "name" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Json.Decode.Pipeline.optional "extensions" (Json.Decode.nullable extensionDecoder) Nothing
@@ -744,8 +744,8 @@ type alias Accessor =
     , normalized : Bool -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_normalized
     , count : Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_count
     , type_ : AccessorType -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_type
-    , max : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_max
-    , min : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_min
+    , max : Maybe (Array Float) -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_max
+    , min : Maybe (Array Float) -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_min
     , sparse : Maybe AccessorSparse -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_sparse
     , name : Maybe String -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_name
     , extensions : Maybe Extension -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_extensions
