@@ -121,15 +121,12 @@ skeleton =
 
 suite : Test
 suite =
-    describe "The String module"
-        [ describe "String.reverse"
-            -- Nest as many descriptions as you like.
-            [ test "has no effect on a palindrome" <|
-                \_ ->
-                    let
-                        gltf =
-                            Json.Decode.decodeString decoder skeleton.raw
-                    in
-                    Expect.equal (Ok skeleton.parsed) gltf
-            ]
+    describe "Decoding the JSON part of the GLTF format"
+        [ test "works on a small generic model" <|
+            \_ ->
+                let
+                    gltf =
+                        Json.Decode.decodeString decoder skeleton.raw
+                in
+                Expect.equal (Ok skeleton.parsed) gltf
         ]
