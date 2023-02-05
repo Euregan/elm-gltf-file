@@ -1,4 +1,4 @@
-module Gbl.Decode.Json.Raw exposing (..)
+module Gltf.Decode.Json.Raw exposing (..)
 
 import Array exposing (Array)
 import Bytes
@@ -514,7 +514,7 @@ materialAlphaModeDecoder =
 mesheDecoder : Json.Decode.Decoder Mesh
 mesheDecoder =
     Json.Decode.succeed Mesh
-        |> Json.Decode.Pipeline.required "primitives" (Json.Decode.array meshPrimitiveDecoder)
+        |> Json.Decode.Pipeline.required "primitives" (Json.Decode.list meshPrimitiveDecoder)
         |> Json.Decode.Pipeline.optional "weights" (Json.Decode.array Json.Decode.float) Array.empty
         |> Json.Decode.Pipeline.optional "name" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Json.Decode.Pipeline.optional "extensions" (Json.Decode.nullable extensionDecoder) Nothing
@@ -581,7 +581,7 @@ nodeDecoder : Json.Decode.Decoder Node
 nodeDecoder =
     Json.Decode.succeed Node
         |> Json.Decode.Pipeline.optional "camera" (Json.Decode.nullable Json.Decode.int) Nothing
-        |> Json.Decode.Pipeline.optional "children" (Json.Decode.array Json.Decode.int) Array.empty
+        |> Json.Decode.Pipeline.optional "children" (Json.Decode.list Json.Decode.int) []
         |> Json.Decode.Pipeline.optional "skin" (Json.Decode.nullable Json.Decode.int) Nothing
         |> Json.Decode.Pipeline.optional "matrix" matrixDecoder (Matrix4x4 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1)
         |> Json.Decode.Pipeline.optional "mesh" (Json.Decode.nullable Json.Decode.int) Nothing
@@ -1031,7 +1031,7 @@ type alias MaterialPbrMetallicRoughness =
 
 type alias Mesh =
     -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-mesh
-    { primitives : Array MeshPrimitive -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_primitives
+    { primitives : List MeshPrimitive -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_primitives
     , weights : Array Float -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_weights
     , name : Maybe String -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_name
     , extensions : Maybe Extension -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_extensions
@@ -1078,7 +1078,7 @@ type MeshPrimitiveMode
 type alias Node =
     -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-node
     { camera : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_camera
-    , children : Array Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_children
+    , children : List Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_children
     , skin : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_skin
     , matrix : Matrix4x4 -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_matrix
     , mesh : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_mesh
