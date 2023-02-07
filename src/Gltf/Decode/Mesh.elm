@@ -3,6 +3,7 @@ module Gltf.Decode.Mesh exposing (texturedFacesFromDefaultScene)
 import Array
 import Bytes exposing (Bytes)
 import Bytes.Decode
+import Color exposing (Color)
 import Gltf.Decode.Json.Raw as Raw
 import Json.Decode
 import Length exposing (Meters)
@@ -125,39 +126,91 @@ getIntVec3 =
     getVec3 (Bytes.Decode.unsignedInt32 Bytes.LE) 3
 
 
-getPrimitiveAttributes : Raw.Gltf -> Bytes -> Raw.Mesh -> Int -> Raw.MeshPrimitive -> ( Result String (List (Point3d Meters coordinates)), Result String (List (Vector3d Unitless coordinates)), Result String (List ( Int, Int, Int )) )
-getPrimitiveAttributes gltf bytes mesh primitiveIndex primitive =
-    ( case primitive.attributes.position of
+getPositions : Raw.Gltf -> Bytes -> Raw.MeshPrimitive -> Result String (List (Point3d Meters coordinates))
+getPositions gltf bytes primitive =
+    case primitive.attributes.position of
         Just positionIndex ->
             getFloatVec3 gltf bytes positionIndex
                 |> Result.map (List.map (\( x, y, z ) -> Point3d.meters x y z))
 
         Nothing ->
-            Err <| "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no position"
-    , case primitive.attributes.normal of
+            Err <| "No positions were found on this primitive"
+
+
+getNormals : Raw.Gltf -> Bytes -> Raw.MeshPrimitive -> Result String (List (Vector3d Unitless coordinates))
+getNormals gltf bytes primitive =
+    case primitive.attributes.normal of
         Just normalIndex ->
             getFloatVec3 gltf bytes normalIndex
                 |> Result.map (List.map (\( x, y, z ) -> Vector3d.unitless x y z))
 
         Nothing ->
-            Err <| "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no normal"
-    , case primitive.indices of
+            Err <| "No normals were found on this primitive"
+
+
+getIndices : Raw.Gltf -> Bytes -> Raw.MeshPrimitive -> Result String (List ( Int, Int, Int ))
+getIndices gltf bytes primitive =
+    case primitive.indices of
         Just indicesIndex ->
             getIntVec3 gltf bytes indicesIndex
 
         Nothing ->
-            Err <| "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no indices"
-    )
+            Err <| "No indice were found on this primitive"
 
 
-toTriangularMesh : Raw.Gltf -> Bytes -> Raw.Mesh -> Result String (TriangularMesh (Vertex coordinates))
+getColor : Raw.Gltf -> Raw.MeshPrimitive -> Result String Color
+getColor gltf primitive =
+    case primitive.material of
+        Just materialIndex ->
+            case Array.get materialIndex gltf.materials of
+                Just material ->
+                    case material.pbrMetallicRoughness of
+                        Just pbr ->
+                            Ok <| Color.fromRgba pbr.baseColorFactor
+
+                        Nothing ->
+                            Err <| "no PBR metallic roughness was found on material" ++ (material.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ " at index " ++ String.fromInt materialIndex
+
+                Nothing ->
+                    Err <| "No material was found at index " ++ String.fromInt materialIndex ++ " (There are only " ++ String.fromInt (Array.length gltf.materials) ++ " materials)"
+
+        Nothing ->
+            Err "No material was found on this primitive"
+
+
+type alias Primitive coordinates =
+    { positions : List (Point3d Meters coordinates)
+    , normals : List (Vector3d Unitless coordinates)
+    , indices : List ( Int, Int, Int )
+    , color : Color
+    }
+
+
+getPrimitiveAttributes : Raw.Gltf -> Bytes -> Raw.Mesh -> Int -> Raw.MeshPrimitive -> Result String (Primitive coordinates)
+getPrimitiveAttributes gltf bytes mesh primitiveIndex primitive =
+    Result.map4 Primitive
+        (getPositions gltf bytes primitive
+            |> Result.mapError (\_ -> "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no positions")
+        )
+        (getNormals gltf bytes primitive
+            |> Result.mapError (\_ -> "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no normals")
+        )
+        (getIndices gltf bytes primitive
+            |> Result.mapError (\_ -> "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no indices")
+        )
+        (getColor gltf primitive
+            |> Result.mapError (\_ -> "The mesh" ++ (mesh.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ "'s primitive (" ++ String.fromInt primitiveIndex ++ ") has no color specified in its material")
+        )
+
+
+toTriangularMesh : Raw.Gltf -> Bytes -> Raw.Mesh -> Result String (List ( TriangularMesh (Vertex coordinates), Color ))
 toTriangularMesh gltf bytes mesh =
     List.indexedMap (getPrimitiveAttributes gltf bytes mesh) mesh.primitives
         |> List.map
-            (\( positionsResult, normalsResult, indicesResult ) ->
-                Result.map3
-                    (\positions normals indices ->
-                        ( List.map2
+            (Result.map
+                (\{ positions, normals, indices, color } ->
+                    ( TriangularMesh.indexed
+                        (List.map2
                             (\position normal ->
                                 { position = position
                                 , normal = normal
@@ -167,16 +220,13 @@ toTriangularMesh gltf bytes mesh =
                             (positions |> List.reverse)
                             (normals |> List.reverse)
                             |> Array.fromList
-                        , indices
                         )
+                        indices
+                    , color
                     )
-                    positionsResult
-                    normalsResult
-                    indicesResult
+                )
             )
-        |> List.map (Result.map (\( vertices, indices ) -> TriangularMesh.indexed vertices indices))
         |> resultFromList
-        |> Result.map TriangularMesh.combine
 
 
 skipBytes : Int -> Bytes.Decode.Decoder a -> Bytes.Decode.Decoder a
@@ -184,7 +234,7 @@ skipBytes skip decoder =
     Bytes.Decode.bytes skip |> Bytes.Decode.andThen (\_ -> decoder)
 
 
-texturedFacesFromDefaultScene : Bytes -> Result String (TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) })
+texturedFacesFromDefaultScene : Bytes -> Result String (List ( TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) }, Color ))
 texturedFacesFromDefaultScene bytes =
     let
         decoder =
@@ -248,9 +298,9 @@ texturedFacesFromDefaultScene bytes =
                                 |> List.map (getNode gltf)
                                 |> List.map (Result.andThen (getMeshes gltf))
                                 |> List.map (Result.andThen (\meshes -> meshes |> List.map (toTriangularMesh gltf valuesBytes) |> resultFromList))
-                                |> List.map (Result.map TriangularMesh.combine)
+                                |> List.map (Result.map List.concat)
                                 |> resultFromList
-                                |> Result.map TriangularMesh.combine
+                                |> Result.map List.concat
 
                         Nothing ->
                             Err <| "The default scene index (" ++ String.fromInt sceneIndex ++ ") is out of bound of the array of scenes (" ++ (String.fromInt <| Array.length gltf.scenes) ++ " items)"

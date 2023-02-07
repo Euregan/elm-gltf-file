@@ -68,6 +68,15 @@ matrixDecoder =
         |> Json.Decode.Pipeline.custom (Json.Decode.index 15 Json.Decode.float)
 
 
+baseColorFactorDecoder : Json.Decode.Decoder BaseColorFactor
+baseColorFactorDecoder =
+    Json.Decode.map4 BaseColorFactor
+        (Json.Decode.index 0 Json.Decode.float)
+        (Json.Decode.index 1 Json.Decode.float)
+        (Json.Decode.index 2 Json.Decode.float)
+        (Json.Decode.index 3 Json.Decode.float)
+
+
 endianness : Bytes.Endianness
 endianness =
     Bytes.LE
@@ -453,7 +462,7 @@ materialDecoder =
 materialPbrMetallicRoughnessDecoder : Json.Decode.Decoder MaterialPbrMetallicRoughness
 materialPbrMetallicRoughnessDecoder =
     Json.Decode.succeed MaterialPbrMetallicRoughness
-        |> Json.Decode.Pipeline.optional "baseColorFactor" quaternionDecoder (Quaternion 1 1 1 1)
+        |> Json.Decode.Pipeline.optional "baseColorFactor" baseColorFactorDecoder (BaseColorFactor 1 1 1 1)
         |> Json.Decode.Pipeline.optional "baseColorTexture" (Json.Decode.nullable textureInfoDecoder) Nothing
         |> Json.Decode.Pipeline.optional "metallicFactor" Json.Decode.float 1
         |> Json.Decode.Pipeline.optional "roughnessFactor" Json.Decode.float 1
@@ -1019,13 +1028,21 @@ type alias MaterialOcclusionTextureInfo =
 
 type alias MaterialPbrMetallicRoughness =
     -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-material-pbrmetallicroughness
-    { baseColorFactor : Quaternion -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_basecolorfactor
+    { baseColorFactor : BaseColorFactor -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_basecolorfactor
     , baseColorTexture : Maybe TextureInfo -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_basecolortexture
     , metallicFactor : Float -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicfactor
     , roughnessFactor : Float -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_roughnessfactor
     , metallicRoughnessTexture : Maybe TextureInfo -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicroughnesstexture
     , extensions : Maybe Extension -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_extensions
     , extras : Maybe Extra -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_extras
+    }
+
+
+type alias BaseColorFactor =
+    { red : Float
+    , green : Float
+    , blue : Float
+    , alpha : Float
     }
 
 
