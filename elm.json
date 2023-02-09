@@ -19,6 +19,7 @@
         "elm/time": "1.0.0 <= v < 2.0.0",
         "elm/url": "1.0.0 <= v < 2.0.0",
         "elm/virtual-dom": "1.0.0 <= v < 2.0.0",
+        "elm-explorations/linear-algebra": "1.0.3 <= v < 2.0.0",
         "ianmackenzie/elm-geometry": "3.9.1 <= v < 4.0.0",
         "ianmackenzie/elm-triangular-mesh": "1.1.0 <= v < 2.0.0",
         "ianmackenzie/elm-units": "2.9.0 <= v < 3.0.0"

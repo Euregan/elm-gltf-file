@@ -4,30 +4,8 @@ import Array exposing (Array)
 import Bytes
 import Json.Decode
 import Json.Decode.Pipeline
-
-
-type alias Matrix4x4 =
-    { c1r1 : Float
-    , c2r1 : Float
-    , c3r1 : Float
-    , c4r1 : Float
-    , c1r2 : Float
-    , c2r2 : Float
-    , c3r2 : Float
-    , c4r2 : Float
-    , c1r3 : Float
-    , c2r3 : Float
-    , c3r3 : Float
-    , c4r3 : Float
-    , c1r4 : Float
-    , c2r4 : Float
-    , c3r4 : Float
-    , c4r4 : Float
-    }
-
-
-type alias Quaternion =
-    { x : Float, y : Float, z : Float, w : Float }
+import Math.Matrix4 exposing (Mat4)
+import Math.Vector3
 
 
 tripleDecoder : Json.Decode.Decoder ( Float, Float, Float )
@@ -38,18 +16,12 @@ tripleDecoder =
         (Json.Decode.index 2 Json.Decode.float)
 
 
-quaternionDecoder : Json.Decode.Decoder Quaternion
-quaternionDecoder =
-    Json.Decode.map4 Quaternion
-        (Json.Decode.index 0 Json.Decode.float)
-        (Json.Decode.index 1 Json.Decode.float)
-        (Json.Decode.index 2 Json.Decode.float)
-        (Json.Decode.index 3 Json.Decode.float)
-
-
-matrixDecoder : Json.Decode.Decoder Matrix4x4
+matrixDecoder : Json.Decode.Decoder Mat4
 matrixDecoder =
-    Json.Decode.succeed Matrix4x4
+    Json.Decode.succeed
+        (\m11 m21 m31 m41 m12 m22 m32 m42 m13 m23 m33 m43 m14 m24 m34 m44 ->
+            Math.Matrix4.fromRecord { m11 = m11, m21 = m21, m31 = m31, m41 = m41, m12 = m12, m22 = m22, m32 = m32, m42 = m42, m13 = m13, m23 = m23, m33 = m33, m43 = m43, m14 = m14, m24 = m24, m34 = m34, m44 = m44 }
+        )
         |> Json.Decode.Pipeline.custom (Json.Decode.index 0 Json.Decode.float)
         |> Json.Decode.Pipeline.custom (Json.Decode.index 1 Json.Decode.float)
         |> Json.Decode.Pipeline.custom (Json.Decode.index 2 Json.Decode.float)
@@ -588,15 +560,60 @@ meshPrimitiveModeDecoder =
 
 nodeDecoder : Json.Decode.Decoder Node
 nodeDecoder =
+    let
+        translation : Mat4 -> Json.Decode.Decoder Mat4
+        translation matrix =
+            Json.Decode.oneOf
+                [ Json.Decode.map3 Math.Matrix4.translate3
+                    (Json.Decode.index 0 Json.Decode.float)
+                    (Json.Decode.index 1 Json.Decode.float)
+                    (Json.Decode.index 2 Json.Decode.float)
+                    |> Json.Decode.field "translation"
+                    |> Json.Decode.map (\translationFunction -> translationFunction matrix)
+                , Json.Decode.succeed matrix
+                ]
+
+        rotation : Mat4 -> Json.Decode.Decoder Mat4
+        rotation matrix =
+            Json.Decode.oneOf
+                [ Json.Decode.map2 Math.Matrix4.rotate
+                    (Json.Decode.index 0 Json.Decode.float)
+                    (Json.Decode.map3 Math.Vector3.vec3
+                        (Json.Decode.index 1 Json.Decode.float)
+                        (Json.Decode.index 2 Json.Decode.float)
+                        (Json.Decode.index 3 Json.Decode.float)
+                    )
+                    |> Json.Decode.field "rotation"
+                    |> Json.Decode.map (\rotateFunction -> rotateFunction matrix)
+                , Json.Decode.succeed matrix
+                ]
+
+        scale : Mat4 -> Json.Decode.Decoder Mat4
+        scale matrix =
+            Json.Decode.oneOf
+                [ Json.Decode.map3 Math.Matrix4.scale3
+                    (Json.Decode.index 0 Json.Decode.float)
+                    (Json.Decode.index 1 Json.Decode.float)
+                    (Json.Decode.index 2 Json.Decode.float)
+                    |> Json.Decode.field "scale"
+                    |> Json.Decode.map (\scaleFunction -> scaleFunction matrix)
+                , Json.Decode.succeed matrix
+                ]
+    in
     Json.Decode.succeed Node
         |> Json.Decode.Pipeline.optional "camera" (Json.Decode.nullable Json.Decode.int) Nothing
         |> Json.Decode.Pipeline.optional "children" (Json.Decode.list Json.Decode.int) []
         |> Json.Decode.Pipeline.optional "skin" (Json.Decode.nullable Json.Decode.int) Nothing
-        |> Json.Decode.Pipeline.optional "matrix" matrixDecoder (Matrix4x4 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1)
+        |> (Json.Decode.Pipeline.custom <|
+                Json.Decode.oneOf
+                    [ Json.Decode.field "matrix" matrixDecoder
+                    , Json.Decode.succeed Math.Matrix4.identity
+                        |> Json.Decode.andThen translation
+                        |> Json.Decode.andThen rotation
+                        |> Json.Decode.andThen scale
+                    ]
+           )
         |> Json.Decode.Pipeline.optional "mesh" (Json.Decode.nullable Json.Decode.int) Nothing
-        |> Json.Decode.Pipeline.optional "rotation" quaternionDecoder (Quaternion 0 0 0 1)
-        |> Json.Decode.Pipeline.optional "scale" tripleDecoder ( 1, 1, 1 )
-        |> Json.Decode.Pipeline.optional "translation" tripleDecoder ( 0, 0, 0 )
         |> Json.Decode.Pipeline.optional "weights" (Json.Decode.array Json.Decode.float) Array.empty
         |> Json.Decode.Pipeline.optional "name" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Json.Decode.Pipeline.optional "extensions" (Json.Decode.nullable extensionDecoder) Nothing
@@ -1097,11 +1114,8 @@ type alias Node =
     { camera : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_camera
     , children : List Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_children
     , skin : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_skin
-    , matrix : Matrix4x4 -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_matrix
+    , matrix : Mat4 -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_matrix
     , mesh : Maybe Int -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_mesh
-    , rotation : Quaternion -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_rotation
-    , scale : ( Float, Float, Float ) -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_scale
-    , translation : ( Float, Float, Float ) -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_translation
     , weights : Array Float -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_weights
     , name : Maybe String -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_name
     , extensions : Maybe Extension -- https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_node_extensions

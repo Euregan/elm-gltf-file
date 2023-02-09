@@ -7,6 +7,8 @@ import Color exposing (Color)
 import Gltf.Decode.Json.Raw as Raw
 import Json.Decode
 import Length exposing (Meters)
+import Math.Matrix4 exposing (Mat4)
+import Math.Vector3
 import Point3d exposing (Point3d)
 import Quantity exposing (Unitless)
 import TriangularMesh exposing (TriangularMesh)
@@ -47,13 +49,13 @@ getNode gltf nodeIndex =
             Err <| "There is no node at index " ++ String.fromInt nodeIndex ++ ", as the node array is only " ++ (String.fromInt <| Array.length gltf.nodes) ++ " items long"
 
 
-getMeshes : Raw.Gltf -> Raw.Node -> Result String (List Raw.Mesh)
+getMeshes : Raw.Gltf -> Raw.Node -> Result String (List ( Raw.Mesh, Mat4 ))
 getMeshes gltf node =
     case ( node.mesh, node.children ) of
         ( Just meshIndex, _ ) ->
             case Array.get meshIndex gltf.meshes of
                 Just mesh ->
-                    Ok [ mesh ]
+                    Ok [ ( mesh, node.matrix ) ]
 
                 Nothing ->
                     Err <| "There is no mesh at index " ++ String.fromInt meshIndex ++ ", as the mesh array is only " ++ (String.fromInt <| Array.length gltf.meshes) ++ " items long"
@@ -65,6 +67,7 @@ getMeshes gltf node =
             children
                 |> List.map (getNode gltf)
                 |> List.map (Result.andThen <| getMeshes gltf)
+                |> List.map (Result.map (List.map <| \( mesh, modifier ) -> ( mesh, Math.Matrix4.mul modifier node.matrix )))
                 |> resultFromList
                 |> Result.map List.concat
 
@@ -203,8 +206,8 @@ getPrimitiveAttributes gltf bytes mesh primitiveIndex primitive =
         )
 
 
-toTriangularMesh : Raw.Gltf -> Bytes -> Raw.Mesh -> Result String (List ( TriangularMesh (Vertex coordinates), Color ))
-toTriangularMesh gltf bytes mesh =
+toTriangularMesh : Raw.Gltf -> Bytes -> ( Raw.Mesh, Mat4 ) -> Result String (List ( TriangularMesh (Vertex coordinates), Color ))
+toTriangularMesh gltf bytes ( mesh, modifier ) =
     List.indexedMap (getPrimitiveAttributes gltf bytes mesh) mesh.primitives
         |> List.map
             (Result.map
@@ -212,8 +215,20 @@ toTriangularMesh gltf bytes mesh =
                     ( TriangularMesh.indexed
                         (List.map2
                             (\position normal ->
-                                { position = position
-                                , normal = normal
+                                { position =
+                                    position
+                                        |> Point3d.unwrap
+                                        |> Math.Vector3.fromRecord
+                                        |> Math.Matrix4.transform modifier
+                                        |> Math.Vector3.toRecord
+                                        |> Point3d.unsafe
+                                , normal =
+                                    normal
+                                        |> Vector3d.unwrap
+                                        |> Math.Vector3.fromRecord
+                                        |> Math.Matrix4.transform modifier
+                                        |> Math.Vector3.toRecord
+                                        |> Vector3d.unsafe
                                 , uv = ( 0, 0 )
                                 }
                             )
