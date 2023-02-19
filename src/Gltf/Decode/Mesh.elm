@@ -72,61 +72,105 @@ getMeshes gltf node =
                 |> Result.map List.concat
 
 
-getVec3 : Bytes.Decode.Decoder a -> Int -> Raw.Gltf -> Bytes -> Int -> Result String (List ( a, a, a ))
-getVec3 scalarDecoder loopOffset gltf bytes accessorIndex =
+mapAccessor : (Raw.Accessor -> Result String (Bytes.Decode.Decoder a)) -> Raw.Gltf -> Bytes -> Int -> Result String a
+mapAccessor decoderConstructor gltf bytes accessorIndex =
     case Array.get accessorIndex gltf.accessors of
         Just accessor ->
-            case accessor.bufferView of
-                Just bufferViewIndex ->
-                    case Array.get bufferViewIndex gltf.bufferViews of
-                        Just bufferView ->
-                            let
-                                raw =
-                                    Bytes.Decode.decode
-                                        (skipBytes
-                                            (accessor.byteOffset + bufferView.byteOffset)
-                                            (Bytes.Decode.loop ( 0, [] )
-                                                (\( done, vertices ) ->
-                                                    if done < accessor.count then
-                                                        Bytes.Decode.map3 (\x y z -> ( x, y, z ))
-                                                            scalarDecoder
-                                                            scalarDecoder
-                                                            scalarDecoder
-                                                            |> Bytes.Decode.map (\vector -> Bytes.Decode.Loop ( done + loopOffset, vector :: vertices ))
-
-                                                    else
-                                                        Bytes.Decode.Done vertices
-                                                            |> Bytes.Decode.succeed
+            Result.andThen
+                (\decoder ->
+                    case accessor.bufferView of
+                        Just bufferViewIndex ->
+                            case Array.get bufferViewIndex gltf.bufferViews of
+                                Just bufferView ->
+                                    let
+                                        raw =
+                                            Bytes.Decode.decode
+                                                (skipBytes
+                                                    (accessor.byteOffset + bufferView.byteOffset)
+                                                    decoder
                                                 )
-                                            )
-                                        )
-                                        bytes
-                            in
-                            case raw of
-                                Just positions ->
-                                    Ok positions
+                                                bytes
+                                    in
+                                    case raw of
+                                        Just result ->
+                                            Ok result
+
+                                        Nothing ->
+                                            Err <| "Could not fetch accessor " ++ String.fromInt accessorIndex ++ " VEC3 data"
 
                                 Nothing ->
-                                    Err <| "Could not fetch accessor " ++ String.fromInt accessorIndex ++ " VEC3 data"
+                                    Err <| "There is no buffer view at index " ++ String.fromInt bufferViewIndex ++ ", as the buffer view array is only " ++ (String.fromInt <| Array.length gltf.bufferViews) ++ " items long"
 
                         Nothing ->
-                            Err <| "There is no buffer view at index " ++ String.fromInt bufferViewIndex ++ ", as the buffer view array is only " ++ (String.fromInt <| Array.length gltf.bufferViews) ++ " items long"
-
-                Nothing ->
-                    Err <| "The accessor at index " ++ String.fromInt accessorIndex ++ " has no buffer view index"
+                            Err <| "The accessor at index " ++ String.fromInt accessorIndex ++ " has no buffer view index"
+                )
+            <|
+                decoderConstructor accessor
 
         Nothing ->
             Err <| "There is no accessor at index " ++ String.fromInt accessorIndex ++ ", as the accessor array is only " ++ (String.fromInt <| Array.length gltf.accessors) ++ " items long"
 
 
+loop : Int -> Bytes.Decode.Decoder a -> Int -> Bytes.Decode.Decoder (List ( a, a, a ))
+loop increment decoder count =
+    Bytes.Decode.loop ( 0, [] )
+        (\( done, vertices ) ->
+            if done < count then
+                Bytes.Decode.map3 (\x y z -> ( x, y, z ))
+                    decoder
+                    decoder
+                    decoder
+                    |> Bytes.Decode.map (\vector -> Bytes.Decode.Loop ( done + increment, vector :: vertices ))
+
+            else
+                Bytes.Decode.Done vertices
+                    |> Bytes.Decode.succeed
+        )
+
+
 getFloatVec3 : Raw.Gltf -> Bytes -> Int -> Result String (List ( Float, Float, Float ))
 getFloatVec3 =
-    getVec3 (Bytes.Decode.float32 Bytes.LE) 1
+    mapAccessor
+        (\accessor ->
+            let
+                decoderResult =
+                    case accessor.componentType of
+                        Raw.Float ->
+                            Ok <| Bytes.Decode.float32 Bytes.LE
+
+                        _ ->
+                            Err <| "Accessor" ++ (accessor.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ " was expected to point to a float"
+            in
+            decoderResult
+                |> Result.map
+                    (\decoder ->
+                        loop 1 decoder accessor.count
+                    )
+        )
 
 
 getIntVec3 : Raw.Gltf -> Bytes -> Int -> Result String (List ( Int, Int, Int ))
 getIntVec3 =
-    getVec3 (Bytes.Decode.unsignedInt32 Bytes.LE) 3
+    mapAccessor
+        (\accessor ->
+            let
+                decoderResult =
+                    case accessor.componentType of
+                        Raw.UnsignedShort ->
+                            Ok <| Bytes.Decode.unsignedInt16 Bytes.LE
+
+                        Raw.UnsignedInt ->
+                            Ok <| Bytes.Decode.unsignedInt32 Bytes.LE
+
+                        _ ->
+                            Err <| "Accessor" ++ (accessor.name |> Maybe.map (\name -> " " ++ name) |> Maybe.withDefault "") ++ " was expected to point to an integer"
+            in
+            decoderResult
+                |> Result.map
+                    (\decoder ->
+                        loop 3 decoder accessor.count
+                    )
+        )
 
 
 getPositions : Raw.Gltf -> Bytes -> Raw.MeshPrimitive -> Result String (List (Point3d Meters coordinates))
