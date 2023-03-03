@@ -1,4 +1,4 @@
-module Gltf.Decode.Mesh exposing (texturedFacesFromDefaultScene)
+module Gltf.Decode.Mesh exposing (assembleDefaultScene, texturedFacesFromDefaultScene)
 
 import Array
 import Bytes exposing (Bytes)
@@ -348,24 +348,29 @@ texturedFacesFromDefaultScene bytes =
     in
     case decoder bytes of
         Just ( gltf, valuesBytes ) ->
-            case gltf.scene of
-                Just sceneIndex ->
-                    case Array.get sceneIndex gltf.scenes of
-                        Just scene ->
-                            scene.nodes
-                                |> Array.toList
-                                |> List.map (getNode gltf)
-                                |> List.map (Result.andThen (getMeshes gltf))
-                                |> List.map (Result.andThen (\meshes -> meshes |> List.map (toTriangularMesh gltf valuesBytes) |> resultFromList))
-                                |> List.map (Result.map List.concat)
-                                |> resultFromList
-                                |> Result.map List.concat
-
-                        Nothing ->
-                            Err <| "The default scene index (" ++ String.fromInt sceneIndex ++ ") is out of bound of the array of scenes (" ++ (String.fromInt <| Array.length gltf.scenes) ++ " items)"
-
-                Nothing ->
-                    Err "There is no default scene in the file"
+            assembleDefaultScene gltf valuesBytes
 
         Nothing ->
             Err "The file is malformed"
+
+
+assembleDefaultScene : Raw.Gltf -> Bytes -> Result String (List ( TriangularMesh { position : Point3d Meters coordinates, normal : Vector3d Unitless coordinates, uv : ( Float, Float ) }, Color ))
+assembleDefaultScene gltf valuesBytes =
+    case gltf.scene of
+        Just sceneIndex ->
+            case Array.get sceneIndex gltf.scenes of
+                Just scene ->
+                    scene.nodes
+                        |> Array.toList
+                        |> List.map (getNode gltf)
+                        |> List.map (Result.andThen (getMeshes gltf))
+                        |> List.map (Result.andThen (\meshes -> meshes |> List.map (toTriangularMesh gltf valuesBytes) |> resultFromList))
+                        |> List.map (Result.map List.concat)
+                        |> resultFromList
+                        |> Result.map List.concat
+
+                Nothing ->
+                    Err <| "The default scene index (" ++ String.fromInt sceneIndex ++ ") is out of bound of the array of scenes (" ++ (String.fromInt <| Array.length gltf.scenes) ++ " items)"
+
+        Nothing ->
+            Err "There is no default scene in the file"
